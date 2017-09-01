@@ -85,8 +85,9 @@ class SponsorshipContract(models.Model):
             last_day = today.replace(day=calendar.monthrange(today.year,
                                                              today.month)[1])
             suspended_gifts = self.env['sponsorship.gift'].search([
-                '&',
+                '&', '&',
                 ('child_id.project_id', '=', contract.project_id.id),
+                '&',
                 ('create_date', '>=', str(first_day)),
                 ('create_date', '<=', str(last_day)),
                 '|',
@@ -96,8 +97,7 @@ class SponsorshipContract(models.Model):
             suspended_gifts.action_suspended()
 
             related_move = suspended_gifts.mapped('payment_id')
-            related_move.button_cancel()
-            related_move.unlink()
+            related_move.state = "Draft"
 
         # Postpone open gifts.
         pending_gifts = self.env['sponsorship.gift'].search([
@@ -108,15 +108,17 @@ class SponsorshipContract(models.Model):
 
     def reactivate_gifts(self):
         for contract in self:
-            suspended_gifts = self.env['sponsorship.gift'].search([
-                ('child_id.project_id', '=', contract.project_id.id),
-                ('state', '=', 'suspended')
+            suspended_gifts = self.env['sponsorship.gift'].search(['&',
+                    ('child_id.project_id', '=', contract.project_id.id),
+                    ('state', '=', 'suspended')
             ])
+            related_move = suspended_gifts.mapped('payment_id')
+            related_move.write({'state': 'Open', 'date': datetime.strftime(
+                "%c")})
             suspended_gifts.action_in_progress()
-            suspended_gifts.action_send()
 
         # Put again gifts in OK state.
-        pending_gifts = self.env['sponsorship.gift'].search([
+        pending_gifts = self.env['sponsorship.gift'].search(['&',
             ('sponsorship_id', 'in', self.ids),
             ('state', '=', 'verify')
         ])
