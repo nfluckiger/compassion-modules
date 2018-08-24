@@ -255,3 +255,6 @@ class SmsChildRequest(models.Model):
                                                            'demande SMS'
                                                 })
                 sms.rappel = sms_sender.sens_sms_request()
+                sms.reserve_child()
+                sms.child_id.hold_id.expiration_date = \
+                    datetime.now() + datetime.timedelta(hour=12)
