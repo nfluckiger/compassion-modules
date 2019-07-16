@@ -13,3 +13,10 @@ from . import models
 from . import mappings
 from . import controllers
 from . import wizards
+from odoo import api, SUPERUSER_ID
+
+
+def post_init_function(cr):
+    with api.Environment.manage():
+        env = api.Environment(cr, SUPERUSER_ID, {})
+        env['import.json.mapping'].python_install_mapping()

@@ -15,6 +15,7 @@ from odoo import api, models, fields
 
 class FieldOffice(models.Model):
     _name = 'compassion.field.office'
+    _inherit = 'compassion.mapped.model'
 
     name = fields.Char('Name')
     field_office_id = fields.Char(required=True)
@@ -90,6 +91,14 @@ class FieldOffice(models.Model):
         }
         message_obj.with_context(async_mode=False).create(message_vals)
         return True
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        connect_data = {
+            'gpid': self.env.user.country_id.codeS
+        }
+
+        return connect_data
 
 
 class FieldOfficeHighRisks(models.Model):

@@ -475,9 +475,7 @@ class GlobalChildSearch(models.TransientModel):
         :param method: Method URL (GET or POST)
         :return:
         """
-        mapping = base_mapping.new_onramp_mapping(
-            self._name, self.env, mapping_name)
-        params = mapping.get_connect_data(self)
+        params = self.data_to_json(mapping_name)
         onramp = OnrampConnector()
         if method == 'POST':
             result = onramp.send_message(service_name, method, params)
@@ -485,13 +483,12 @@ class GlobalChildSearch(models.TransientModel):
             result = onramp.send_message(service_name, method, None, params)
         if result['code'] == 200:
             self.nb_found = result['content'].get('NumberOfBeneficiaries', 0)
-            mapping = base_mapping.new_onramp_mapping(
-                'compassion.global.child', self.env)
+
             if not result['content'][result_name]:
                 raise UserError(_("No children found meeting criterias"))
             new_children = self.env['compassion.global.child']
             for child_data in result['content'][result_name]:
-                child_vals = mapping.get_vals_from_connect(child_data)
+                child_vals = self.json_to_data(child_data, mapping_name)
                 child_vals['search_view_id'] = self.id
                 new_children += self.env['compassion.global.child'].create(
                     child_vals)
@@ -543,3 +540,27 @@ class GlobalChildSearch(models.TransientModel):
             return False
 
         return True
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        connect_data = super(GlobalChildSearch, self).data_to_json(
+            mapping_name)
+        temp_data = connect_data.copy()
+        if mapping_name == 'profile_search':
+            for key, value in temp_data.iteritems():
+                if not value:
+                    del connect_data[key]
+            connect_data['gender'] = \
+                connect_data['gender'] and connect_data['gender'][0]
+        elif mapping_name == 'advanced_search':
+            tmpdict = {
+                'NumberOfBeneficiaries': temp_data['NumberOfBeneficiaries'],
+                'Start': temp_data['Start'],
+                'Filter': temp_data['Filter'],
+                'SortBy': 'PriorityScore',
+                'SortType': None,
+            }
+            connect_data.clear()
+            connect_data['BeneficiarySearchRequestList'] = tmpdict
+
+        return connect_data

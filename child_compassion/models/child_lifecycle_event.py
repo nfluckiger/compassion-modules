@@ -9,8 +9,6 @@
 #
 ##############################################################################
 from odoo import models, fields, api
-from odoo.addons.message_center_compassion.mappings \
-    import base_mapping as mapping
 
 
 class ChildLifecycleEvent(models.Model):
@@ -19,6 +17,7 @@ class ChildLifecycleEvent(models.Model):
     _description = 'Child Lifecycle Event'
     _inherit = 'translatable.model'
     _order = 'date desc, id desc'
+    _inherit = ['compassion.mapped.model']
 
     child_id = fields.Many2one(
         'compassion.child', 'Child', required=True, ondelete='cascade',
@@ -305,16 +304,28 @@ class ChildLifecycleEvent(models.Model):
 
     @api.model
     def process_commkit(self, commkit_data):
-        lifecycle_mapping = mapping.new_onramp_mapping(
-            self._name,
-            self.env,
-            'new_child_lifecyle')
         lifecycle_ids = list()
 
         for single_data in commkit_data.get('BeneficiaryLifecycleEventList',
                                             [commkit_data]):
-            vals = lifecycle_mapping.get_vals_from_connect(single_data)
+            vals = self.json_to_data(single_data)
             lifecycle = self.create(vals)
             lifecycle_ids.append(lifecycle.id)
 
         return lifecycle_ids
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        if 'FutureHopes' in json.keys() and json['FutureHopes']:
+            json['FutureHopes'] = json['FutureHopes'].split(';')
+        odoo_data = super(ChildLifecycleEvent, self).json_to_data(json,
+                                                                  mapping_name)
+        request_reason = odoo_data.get('request_reason')
+        if request_reason:
+            odoo_data['request_reason'] = request_reason.lower()
+
+        return odoo_data
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        return {'gpid': self.env.user.country_id.code}

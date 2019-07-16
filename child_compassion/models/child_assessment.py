@@ -11,8 +11,7 @@
 
 
 from odoo import models, fields, api
-
-from ..mappings.child_assessment_mapping import ChildAssessmentMapping
+from datetime import datetime
 
 
 class ChildAssessment(models.Model):
@@ -20,6 +19,7 @@ class ChildAssessment(models.Model):
     _name = 'compassion.child.cdpr'
     _description = 'Child CDPR Assessment'
     _order = 'date desc'
+    _inherit = ['compassion.mapped.model']
 
     assesment_type = fields.Char()
     child_id = fields.Many2one(
@@ -36,11 +36,19 @@ class ChildAssessment(models.Model):
 
     @api.model
     def process_commkit(self, commkit_data):
-        child_assessment_mapping = ChildAssessmentMapping(self.env)
         assessment_ids = list()
         for cdpr_data in commkit_data.get(
                 'BeneficiaryAssessmentResponseList', [commkit_data]):
-            vals = child_assessment_mapping.get_vals_from_connect(cdpr_data)
+            vals = self.json_to_data(cdpr_data)
             child_assessment = self.create(vals)
             assessment_ids.append(child_assessment.id)
         return assessment_ids
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        connect_data = super(ChildAssessment, self).data_to_json(mapping_name)
+        if 'CompletionDate' in connect_data:
+            endDateStr = connect_data.get('CompletionDate')
+            endDate = datetime.strptime(endDateStr, "%Y-%m-%d %H:%M:%S")
+            connect_data['CompletionDate'] = endDate.strftime(
+                "%Y-%m-%dT%H:%M:%SZ")

@@ -18,7 +18,6 @@ from odoo.addons.advanced_translation.models.ir_advanced_translation \
     import setlocale
 from datetime import datetime, date
 
-from ..mappings.compassion_child_mapping import CompassionChildMapping
 from .compassion_hold import HoldType
 
 from odoo.exceptions import UserError
@@ -34,7 +33,7 @@ class CompassionChild(models.Model):
     _name = 'compassion.child'
     _rec_name = 'local_id'
     _inherit = ['compassion.generic.child', 'mail.thread',
-                'translatable.model']
+                'translatable.model', 'compassion.mapped.model']
     _description = "Sponsored Child"
     _order = 'local_id asc,date desc'
 
@@ -345,6 +344,27 @@ class CompassionChild(models.Model):
         """ Small wrapper to unlink only released children. """
         return self.filtered(lambda c: c.state == 'R').unlink()
 
+    @api.multi
+    def write(self, vals):
+        result = super(CompassionChild, self).write(vals)
+
+        if self.state == 'W' and self.hold_id and self.hold_id.hold_id:
+            self.child_consigned()
+        elif self.state == 'N' and self.sponsor_id:
+            self.child_sponsored()
+        elif self.state == 'P' and self.hold_id:
+            self.child_waiting_hold()
+        elif self.state == 'P' and not self.hold_id and (
+            not self.lifecycle_ids or 'Exit' not in self.lifecycle_ids[0].type
+        ):
+            self.child_released()
+            self.child_departed()
+        elif self.state == 'R' and self.hold_id:
+            self.child_waiting_hold()
+        elif self.state == 'R' and self.lifecycle_ids and 'Exit' in self.lifecycle_ids[0].type:
+            self.child_departed()
+        return result
+
     ##########################################################################
     #                             PUBLIC METHODS                             #
     ##########################################################################
@@ -360,21 +380,19 @@ class CompassionChild(models.Model):
     def major_revision(self, commkit_data):
         """ Called when a MajorRevision Kit is received. """
         child_ids = list()
-        child_mapping = CompassionChildMapping(self.env)
         for child_data in commkit_data.get('BeneficiaryMajorRevisionList',
                                            [commkit_data]):
             global_id = child_data.get('Beneficiary_GlobalID')
             child = self.search([('global_id', '=', global_id)])
             if child:
                 child_ids.append(child.id)
-                child._major_revision(child_mapping.get_vals_from_connect(
+                child._major_revision(self.json_to_data(
                     child_data))
         return child_ids
 
     @api.model
     def new_kit(self, commkit_data):
         """ New child kit is received. """
-        child_mapping = CompassionChildMapping(self.env)
         children = self
         for child_data in commkit_data.get('BeneficiaryResponseList',
                                            [commkit_data]):
@@ -382,7 +400,7 @@ class CompassionChild(models.Model):
             child = self.search([('global_id', '=', global_id)])
             if child:
                 children += child
-                child.write(child_mapping.get_vals_from_connect(child_data))
+                child.write(self.json_to_data(child_data))
         children.update_child_pictures()
         return children.ids
 
@@ -463,7 +481,7 @@ class CompassionChild(models.Model):
     ###################
     @api.multi
     def depart(self):
-        self.signal_workflow('release')
+        self.child_released()
 
     @api.multi
     def reinstatement(self):
@@ -599,3 +617,48 @@ class CompassionChild(models.Model):
         self.ensure_one()
         self.write(vals)
         self.get_infos()
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        connect_data = super(CompassionChild, self).json_to_data(json,
+                                                                 mapping_name)
+        if mapping_name == 'GetDetails':
+            connect_data.clear()
+            connect_data['gpid'] = self.env.user.country_id.code
+
+        return connect_data
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        odoo_data = super(CompassionChild, self).data_to_json(mapping_name)
+
+        if 'gender' in odoo_data:
+            if odoo_data['gender'] == 'Female':
+                odoo_data['gender'] = 'F'
+            else:
+                odoo_data['gender'] = 'M'
+        # Replace list of dict by the household id (created or updated)
+        if 'household_id' in odoo_data:
+            household_data = odoo_data['household_id'][0]
+            household = self.env['compassion.household'].search(
+                [('household_id', '=', household_data[
+                    'household_id'])])
+            if household:
+                household.write(household_data)
+                odoo_data['household_id'] = household.id
+            else:
+                odoo_data['household_id'] = household.create(household_data).id
+
+        # Unlink old revised values and create new ones
+        if isinstance(odoo_data.get('revised_value_ids'), list):
+            child = self.env['compassion.child'].search([
+                ('global_id', '=', odoo_data['global_id'])])
+            child.revised_value_ids.unlink()
+            for value in odoo_data['revised_value_ids']:
+                self.env['compassion.major.revision'].create({
+                    'name': value,
+                    'child_id': child.id,
+                })
+            del odoo_data['revised_value_ids']
+
+        return odoo_data

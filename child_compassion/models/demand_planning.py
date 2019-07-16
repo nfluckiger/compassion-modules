@@ -134,3 +134,27 @@ class DemandPlanning(models.Model):
         return [
             ('week_start_date', '=', fields.Date.to_string(start_date)),
         ]
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        connect_data = super(DemandPlanning, self).json_to_data(json,
+                                                                mapping_name)
+        if mapping_name == 'create_demand_planning':
+            demand_data = {
+                'GlobalPartnerWeeklyDemandRequestList':
+                    connect_data['GlobalPartnerWeeklyDemandRequestList'],
+                'GlobalPartner_ID': 'CH',
+            }
+            connect_data.clear()
+            connect_data['GlobalPartnerWeeklyDemandRequest'] = demand_data
+
+        else:
+            demand_data = {
+                'ResupplyQuantity': connect_data['ResupplyQuantity'],
+                'TotalDemand': connect_data['TotalDemand'],
+                'WeekEndDate': connect_data['WeekEndDate'],
+                'WeekStartDate': connect_data['WeekStartDate'],
+            }
+            connect_data = demand_data
+
+        return connect_data

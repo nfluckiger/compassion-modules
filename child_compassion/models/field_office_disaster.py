@@ -10,7 +10,6 @@
 ##############################################################################
 
 from odoo import api, models, fields, _
-from ..mappings.field_office_disaster_mapping import FieldOfficeDisasterMapping
 
 
 class ICPDisasterImpact(models.Model):
@@ -35,6 +34,7 @@ class FieldOfficeDisasterUpdate(models.Model):
     _name = 'fo.disaster.update'
     _description = 'Field Office Disaster Update'
     _order = 'id desc'
+    _inherit = 'compassion.mapped.model'
 
     disaster_id = fields.Many2one(
         'fo.disaster.alert', 'Disaster Alert', ondelete='cascade'
@@ -51,6 +51,17 @@ class FieldOfficeDisasterUpdate(models.Model):
         ('fodu_id', 'unique(fodu_id)',
          'The disaster update already exists in database.'),
     ]
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        odoo_data = super(FieldOfficeDisasterUpdate, self).json_to_data(
+            json, mapping_name
+        )
+        if 'summary' in odoo_data:
+            odoo_data['summary'] = odoo_data['summary'].replace(
+                '\\r', '\n').replace('\\n', '\n').replace('\\t', '\t')
+
+        return odoo_data
 
 
 class ChildDisasterImpact(models.Model):
@@ -101,7 +112,7 @@ class DisasterLoss(models.Model):
 class FieldOfficeDisasterAlert(models.Model):
     _name = 'fo.disaster.alert'
     _description = 'Field Office Disaster Alert'
-    _inherit = 'mail.thread'
+    _inherit = ['mail.thread', 'compassion.mapped.model']
     _order = 'disaster_date desc, id desc'
 
     ##########################################################################
@@ -280,11 +291,44 @@ class FieldOfficeDisasterAlert(models.Model):
     ##########################################################################
     @api.model
     def process_commkit(self, commkit_data):
-        mapping = FieldOfficeDisasterMapping(self.env)
         fo_ids = list()
         for single_data in commkit_data.get(
                 'DisasterResponseList', [commkit_data]):
-            vals = mapping.get_vals_from_connect(single_data)
+            vals = self.json_to_data(single_data, 'field_office_disaster')
             fo_disaster = self.create(vals)
             fo_ids.append(fo_disaster.id)
         return fo_ids
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        odoo_data = super(FieldOfficeDisasterAlert, self).json_to_data(
+            json, mapping_name
+        )
+        disaster = self.env[self.ODOO_MODEL].search(
+            [('disaster_id', '=', odoo_data['disaster_id'])])
+
+        if 'child_disaster_impact_ids' in odoo_data:
+            # Remove old impacts not related to our children
+            disaster.child_disaster_impact_ids.filtered(
+                lambda i: not i.child_id).unlink()
+            impact_list = [(0, 0, impact) for impact in
+                           odoo_data['child_disaster_impact_ids']]
+            odoo_data['child_disaster_impact_ids'] = impact_list
+
+        if 'fcp_disaster_impact_ids' in odoo_data:
+            disaster.fcp_disaster_impact_ids.unlink()
+            impact_list = [(0, 0, impact) for impact in
+                           odoo_data['fcp_disaster_impact_ids']]
+            odoo_data['fcp_disaster_impact_ids'] = impact_list
+
+        if 'fo_disaster_update_ids' in odoo_data:
+            update_list = list()
+            update_obj = self.env['fo.disaster.update']
+            for impact in odoo_data['fo_disaster_update_ids']:
+                update = update_obj.search([
+                    ('fodu_id', '=', impact.get('fodu_id'))])
+                if update:
+                    update_list.append((1, update.id, impact))
+                else:
+                    update_list.append((0, 0, impact))
+            odoo_data['fo_disaster_update_ids'] = update_list

@@ -18,7 +18,8 @@ from odoo.exceptions import UserError
 class CompassionReservation(models.Model):
     _name = 'compassion.reservation'
     _description = 'Project Reservation'
-    _inherit = ['compassion.abstract.hold', 'mail.thread']
+    _inherit = ['compassion.abstract.hold', 'mail.thread',
+                "compassion.mapped.model"]
     _rec_name = 'reservation_id'
 
     ##########################################################################
@@ -214,3 +215,63 @@ class CompassionReservation(models.Model):
             'reservation_hold_duration')
         dt = timedelta(days=days_on_hold)
         self.expiration_date = fields.Date.to_string(expiration + dt)
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        connect_data = super(CompassionReservation, self).json_to_data(
+                json, mapping_name)
+
+        if mapping_name == 'create_reservation':
+            if 'HoldExpirationDate' in connect_data:
+                expirationDateStr = connect_data.get('HoldExpirationDate')
+                expirationDate = datetime.strptime(expirationDateStr,
+                                                   "%Y-%m-%d %H:%M:%S")
+                connect_data['HoldExpirationDate'] = expirationDate.strftime(
+                    "%Y-%m-%dT%H:%M:%SZ")
+            tmp = {
+                'Channel_Name': connect_data['Channel_Name'],
+                'ICP_ID': connect_data['ICP_ID'],
+                'CampaignEventIdentifier': connect_data['CampaignEventIdentifier'],
+                'ExpirationDate': connect_data['ExpirationDate'],
+                'HoldExpirationDate': connect_data['HoldExpirationDate'],
+                'HoldYieldRate': connect_data['HoldYieldRate'],
+                'ID': connect_data['ID'],
+                'IsReservationAutoApproved': connect_data['IsReservationAutoApproved'],
+                'NumberOfBeneficiaries': connect_data['NumberOfBeneficiaries'],
+                'PrimaryOwner': connect_data['PrimaryOwner'],
+                'SecondaryOwner': connect_data['SecondaryOwner'],
+                'GlobalPartner_ID': 'CH',
+                'ReservationType': 'ICP',
+                'SourceCode': ''
+            }
+            connect_data = tmp
+            connect_data['CampaignEventIdentifier'] = connect_data['CampaignEventIdentifier']\
+                if connect_data['CampaignEventIdentifier'] else 'Child reservation'
+        elif mapping_name == 'cancel_reservation':
+            tmp = {
+                'GlobalPartner_ID': 'CH',
+                'Reservation_ID': connect_data['Reservation_ID'],
+            }
+            connect_data = tmp
+        elif mapping_name == 'beneficiary_reservation':
+            tmp ={
+                'Beneficiary_GlobalID': connect_data['Beneficiary_GlobalID'],
+                'Channel_Name': connect_data['Beneficiary_GlobalID'],
+                'ICP_ID': connect_data['ICP_ID'],
+                'ExpirationDate': connect_data['ExpirationDate'],
+                'HoldExpirationDate': connect_data['HoldExpirationDate'],
+                'HoldYieldRate': connect_data['HoldYieldRate'],
+                'ID': connect_data['ID'],
+                'IsReservationAutoApproved': connect_data['IsReservationAutoApproved'],
+                'NumberOfBeneficiaries': connect_data['NumberOfBeneficiaries'],
+                'PrimaryOwner': connect_data['PrimaryOwner'],
+                'SecondaryOwner': connect_data['SecondaryOwner'],
+                'GlobalPartner_ID': 'CH',
+                'ReservationType': 'Sponsorship Beneficiary',
+                'SourceCode': '',
+                'CampaignEventIdentifier': 'Child reservation',
+            }
+
+            connect_data = tmp
+
+        return connect_data

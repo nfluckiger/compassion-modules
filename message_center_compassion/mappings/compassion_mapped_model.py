@@ -27,14 +27,14 @@ class CompassionMappedModel(models.AbstractModel):
         if mapping_name:
             mapping = self.env['compassion.mapping'].search(
                 [('name', '=', mapping_name)])
-        else:
+        if not mapping_name or not mapping:
             mapping = self.env['compassion.mapping'].search(
                 [('model_id.name', '=', self._name)])
         json = {}
         for fieldtojson in mapping.fields_json_ids:
             if fieldtojson.sub_mapping_id:
-                json[fieldtojson.json_name] = self.data_to_json(
-                    fieldtojson.sub_mapping_id.name)
+                json[fieldtojson.json_name] = self.env[fieldtojson.sub_mapping_id.model_id]\
+                    .data_to_json(fieldtojson.sub_mapping_id.name)
             else:
                 json[fieldtojson.json_name] = getattr(self, fieldtojson.field_id.name)
         return json
@@ -51,13 +51,14 @@ class CompassionMappedModel(models.AbstractModel):
         if mapping_name:
             mapping = self.env['compassion.mapping'].search(
                 [('name', '=', mapping_name)])
-        else:
+        if not mapping_name or not mapping:
             mapping = self.env['compassion.mapping'].search(
                 [('model_id.name', '=', self._name)])
         data = {}
         for fieldtojson in mapping.fields_json_ids:
             if fieldtojson.sub_mapping_id:
-                data.update(self.json_to_data(json, fieldtojson.sub_mapping_id.name))
+                data.update(self.env[fieldtojson.sub_mapping_id.model_id].json_to_data(
+                    json, fieldtojson.sub_mapping_id.name))
             else:
                 data[fieldtojson.field_id.name] = json[fieldtojson.json_name]
         return data

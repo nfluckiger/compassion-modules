@@ -68,21 +68,3 @@ class CompassionMapping(models.Model):
             'fields_json_ids': [(6, 0, fields)]
         })
         return self
-
-                if type(json[field]) is tuple:
-                    for multi_name in json[field]:
-                        fields.append(self.env['field_to_json'].create({
-                            'json_name': field,
-                            'mapping_link': False,
-                            'field_name': multi_name,
-                            'other_field_to_json_id': False
-                        }).id)
-                else:
-                    fields.append(self.env['field_to_json'].create({
-                        'field_name': json[field] if not cond else False,
-                        'json_name': field,
-                        'mapping_link': False if not cond else True,
-                        'other_field_to_json_id': tmp_mapping if cond else False
-                    }).id)
-            else:
-                fields.append(field_to_json)

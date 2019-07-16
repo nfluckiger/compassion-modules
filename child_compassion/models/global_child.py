@@ -13,7 +13,7 @@ import logging
 
 from odoo import models, fields, api
 import base64
-import urllib2
+from urllib.request import urlopen
 from datetime import date
 
 logger = logging.getLogger(__name__)
@@ -25,7 +25,7 @@ class GenericChild(models.AbstractModel):
         - compassion.global.child : available children in global pool
     """
     _name = 'compassion.generic.child'
-
+    _inherit = ['compassion.mapped.model']
     # General Information
     #####################
     global_id = fields.Char('Global ID', required=True, readonly=True)
@@ -106,6 +106,32 @@ class GenericChild(models.AbstractModel):
             child.age = today.year - born.year - \
                 ((today.month, today.day) < (born.month, born.day))
 
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        odoo_data = super(GenericChild, self).json_to_data(json, mapping_name)
+
+        if 'ICP_ID' in odoo_data.keys() and not odoo_data.get('project_id'):
+            project = self.env['compassion.project'].create({
+                'fcp_id': odoo_data['ICP_ID']
+            })
+            odoo_data['project_id'] = project.id
+
+        # Take first letter of gender
+        gender = odoo_data.get('gender')
+        if gender:
+            odoo_data['gender'] = gender[0]
+        # Put firstname in preferred_name if not defined
+        preferred_name = odoo_data.get('preferred_name')
+        if not preferred_name:
+            odoo_data['preferred_name'] = odoo_data.get('firstname')
+        # Remove invalid data
+        for key in odoo_data.iterkeys():
+            val = odoo_data[key]
+            if isinstance(val, basestring) and val.lower() in (
+                    'null', 'false', 'none', 'other', 'unknown'):
+                odoo_data[key] = False
+        return odoo_data
+
 
 class GlobalChild(models.TransientModel):
     """ Available child in the global childpool
@@ -171,7 +197,7 @@ class GlobalChild(models.TransientModel):
                 url = child.image_url if not thumb else child.thumbnail_url
                 try:
                     child.portrait = base64.encodestring(
-                        urllib2.urlopen(url).read())
+                        urlopen(url).read())
                 except:
                     logger.error('Image cannot be fetched : ' + str(url))
 

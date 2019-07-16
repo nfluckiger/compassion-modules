@@ -13,9 +13,7 @@ import logging
 from datetime import datetime, timedelta
 from pytz import timezone
 import sys
-
-
-from ..mappings.icp_mapping import ICPMapping
+import re
 
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError
@@ -36,7 +34,7 @@ class CompassionProject(models.Model):
     """ A compassion project """
     _name = 'compassion.project'
     _rec_name = 'fcp_id'
-    _inherit = ['mail.thread', 'translatable.model']
+    _inherit = ['mail.thread', 'translatable.model', 'compassion.mapped.model']
     _description = "Frontline Church Partner"
 
     ##########################################################################
@@ -488,19 +486,60 @@ class CompassionProject(models.Model):
     @api.model
     def new_kit(self, commkit_data):
         """ New project kit is received. """
-        project_mapping = ICPMapping(self.env)
         projects = self
         for project_data in commkit_data.get('ICPResponseList',
                                              [commkit_data]):
             fcp_id = project_data.get('ICP_ID')
             project = self.search([('fcp_id', '=', fcp_id)])
-            vals = project_mapping.get_vals_from_connect(project_data)
+            vals = self.json_to_data(project_data)
             if project:
                 projects += project
                 project.write(vals)
             else:
                 projects += self.create(vals)
         return projects.ids
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        if 'PrimaryLanguage' in json and json['PrimaryLanguage']:
+            json['PrimaryLanguage'] = json['PrimaryLanguage'].lower().title()
+        odoo_data = super(CompassionProject, self).json_to_data(json,
+                                                                mapping_name)
+        status = odoo_data.get('status')
+        if status:
+            status_mapping = {
+                'Active': 'A',
+                'Phase Out': 'P',
+                'Suspended': 'S',
+                'Transitioned': 'T',
+            }
+            odoo_data['status'] = status_mapping[status]
+
+        for key in odoo_data.iterkeys():
+            val = odoo_data[key]
+            if isinstance(val, basestring) and val.lower() in (
+                    'null', 'false', 'none', 'other', 'unknown'):
+                odoo_data[key] = False
+
+        monthly_income = odoo_data.get('monthly_income')
+        if monthly_income:
+            monthly_income = monthly_income.replace(',', '')
+            # Replace all but last dot
+            monthly_income = re.sub(r"\.(?=[^.]*\.)", "", monthly_income)
+            # Replace any alpha character
+            monthly_income = re.sub(r'[a-zA-Z$ ]', "", monthly_income)
+            try:
+                float(monthly_income)
+                odoo_data['monthly_income'] = monthly_income
+            except ValueError:
+                # Weird value received, we prefer to ignore it.
+                del odoo_data['monthly_income']
+
+        return odoo_data
+
+    @api.multi
+    def data_to_json(self, mapping_name=None):
+        return {'gpid': self.env.user.country_id.code}
 
     ##########################################################################
     #                             VIEW CALLBACKS                             #

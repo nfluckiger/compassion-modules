@@ -17,7 +17,7 @@ from odoo.addons.message_center_compassion.mappings \
 
 class ProjectLifecycle(models.Model):
     _name = 'compassion.project.ile'
-    _inherit = 'translatable.model'
+    _inherit = ['translatable.model', 'compassion.mapped.model']
     _description = 'Project lifecycle event'
     _order = 'date desc, id desc'
 
@@ -133,11 +133,6 @@ class ProjectLifecycle(models.Model):
 
     @api.model
     def process_commkit(self, commkit_data):
-        project_mapping = mapping.new_onramp_mapping(
-            self._name,
-            self.env,
-            'new_project_lifecyle')
-
         lifecycle_ids = list()
         for single_data in commkit_data.get('ICPLifecycleEventList',
                                             [commkit_data]):
@@ -146,7 +141,7 @@ class ProjectLifecycle(models.Model):
             ])
             if not project:
                 project.create({'fcp_id': single_data['ICP_ID']})
-            vals = project_mapping.get_vals_from_connect(single_data)
+            vals = self.json_to_data(single_data)
             lifecycle = self.create(vals)
             lifecycle_ids.append(lifecycle.id)
 
@@ -154,3 +149,23 @@ class ProjectLifecycle(models.Model):
             lifecycle.project_id.last_update_date = fields.Date.today()
 
         return lifecycle_ids
+
+    @api.model
+    def json_to_data(self, json, mapped_name=None):
+        return {'gpid': self.env.user.country_id.code}
+
+    @api.multi
+    def data_to_json(self, mapped_name=None):
+        odoo_data = super(ProjectLifecycle, self).data_to_json(mapped_name)
+
+        status = odoo_data.get('project_status')
+        if status:
+            status_mapping = {
+                'Active': 'A',
+                'Phase Out': 'P',
+                'Suspended': 'S',
+                'Transitioned': 'T',
+            }
+            odoo_data['project_status'] = status_mapping[status]
+
+        return odoo_data

@@ -12,13 +12,11 @@
 
 from odoo import api, models, fields, _
 
-from ..mappings.household_mapping import HouseHoldMapping
-
 
 class Household(models.Model):
     _name = 'compassion.household'
     _description = 'Household'
-    _inherit = 'translatable.model'
+    _inherit = ['compassion.mapped.model', 'translatable.model']
 
     household_id = fields.Char(required=True)
     child_ids = fields.One2many(
@@ -198,17 +196,51 @@ class Household(models.Model):
     def process_commkit(self, commkit_data):
         """ Household Major Revision """
         household_ids = list()
-        household_mapping = HouseHoldMapping(self.env)
         for household_data in commkit_data.get('BeneficiaryHouseholdList',
                                                [commkit_data]):
             household = self.search([
                 ('household_id', '=', household_data.get('Household_ID'))])
             if household:
                 household_ids.append(household.id)
-                household_vals = household_mapping.get_vals_from_connect(
+                household_vals = self.json_to_data(
                     household_data)
                 household.write(household_vals)
         return household_ids
+
+    @api.model
+    def json_to_data(self, json, mapping_name=None):
+        odoo_data = super(Household, self).json_to_data(json, mapping_name)
+        if isinstance(odoo_data.get('revised_value_ids'), list):
+            household = self.env[self.ODOO_MODEL].search(
+                [('household_id', '=', odoo_data['household_id'])])
+            household.revised_value_ids.unlink()
+            for value in odoo_data['revised_value_ids']:
+                self.env['compassion.major.revision'].create({
+                    'name': value,
+                    'household_id': household.id,
+                })
+            del odoo_data['revised_value_ids']
+
+            # Replace dict by a tuple for the ORM update/create
+        if 'member_ids' in odoo_data:
+            # Remove all members
+            household = self.env[self.ODOO_MODEL].search(
+                [('household_id', '=', odoo_data['household_id'])])
+            household.member_ids.unlink()
+
+            member_list = list()
+            for member in odoo_data['member_ids']:
+                orm_tuple = (0, 0, member)
+                member_list.append(orm_tuple)
+            odoo_data['member_ids'] = member_list or False
+
+        for key in odoo_data.iterkeys():
+            val = odoo_data[key]
+            if isinstance(val, basestring) and val.lower() in (
+                    'null', 'false', 'none', 'other', 'unknown'):
+                odoo_data[key] = False
+
+        return odoo_data
 
     ##########################################################################
     #                             ORM METHODS                                #
