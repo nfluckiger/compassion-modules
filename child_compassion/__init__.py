@@ -10,13 +10,15 @@
 ##############################################################################
 
 from . import models
-from . import mappings
 from . import controllers
 from . import wizards
 from odoo import api, SUPERUSER_ID
+import os
 
 
-def post_init_function(cr):
+def post_init_function(cr, registery):
     with api.Environment.manage():
         env = api.Environment(cr, SUPERUSER_ID, {})
-        env['import.json.mapping'].python_install_mapping()
+        file_name = os.path.join(os.path.dirname(__file__)) + \
+                        '/static/src/json/mappings.json'
+        env['import.json.mapping'].python_install_mapping(file_name)

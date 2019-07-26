@@ -30,39 +30,57 @@ class CompassionMapping(models.Model):
         self.ensure_one()
         fields = []
         for field in json.keys():
-            field_to_json = self.env['field_to_json'].search([
-                '&', ('json_name', 'ilike', field),
-                ('field_name', 'ilike', json[field])]).id
-            if not field_to_json:
-                cond = type(json[field]) is dict
-                if cond:
-                    tmp_mapping = self.create({
-                        'name': field,
-                        'model_id': self.model_id
-                    })
-                    tmp_mapping.create_from_json(json[field])
-                    if type(json[field]) is tuple:
-                        for multi_name in json[field]:
-                            fields.append(self.env['field_to_json'].create({
-                                'json_name': field,
-                                'field_name': multi_name,
-                            }).id)
-                    else:
-                        fields.append(self.env['field_to_json'].create({
-                            'field_name': json[field] if not cond else False,
-                            'json_name': field,
-                            'sub_mapping_id': tmp_mapping if cond else False
-                        }).id)
-                else:
-                    fields.append(field_to_json)
+            if type(json[field]) is dict:
+                tmp_mapping = self.create({
+                    'name': json[field]['name'],
+                    'model_id': json[field]['odoo']
+                })
+                tmp_mapping.create_from_json(json[field]['mapping'])
+                fields.append(self.env['compassion.field.to.json'].create({
+                    'field_id': False,
+                    'json_name': field,
+                    'sub_mapping_id': tmp_mapping.id
+                }).id)
             else:
-                fields.append(field_to_json)
+                if type(json[field]) is str:
+                    json[field] = [json[field]]
+                for multi_name in json[field]:
+                    split_name = multi_name.split(".")
+                    model_id = self.model_id
+                    name = ""
+                    for index in range(0, len(split_name)-1):
+                        model_name = self.env['ir.model.fields'].search([
+                           '&', ('name', '=', split_name[index]),
+                                ('model_id', '=', self.model_id.id)
+                        ]).relation
+                        model_id = self.env['ir.model'].search([
+                            ('model', '=', model_name)
+                        ])
+                        name = split_name[index+1]
 
-        duplicate_mapping = self.env['compassion_mapping'].search([
-            ('fields_json_ids', '=', fields)
+                    split_name = name if name else split_name[0]
+                    field_name = self.env['ir.model.fields'].search([
+                       '&', ('name', '=', split_name),
+                            ('model_id', '=', model_id.id)
+                    ])
+                    field_to_json = self.env['compassion.field.to.json'].search([
+                        '&', ('json_name', '=', field),
+                        ('field_id', '=', field_name.id)]).id
+                    if not field_to_json:
+                        fields.append(self.env['compassion.field.to.json'].create({
+                            'field_id': field_name.id,
+                            'json_name': field,
+                            'sub_mapping_id': False
+                        }).id)
+                    else:
+                        fields.append(field_to_json)
+
+        duplicate_mapping = self.env['compassion.mapping'].search([
+            ('model_id', '=', self.model_id.id)
         ])
-        if duplicate_mapping:
-            return duplicate_mapping
+        for mapping in duplicate_mapping:
+            if mapping.fields_json_ids == fields:
+                return duplicate_mapping
 
         self.write({
             'fields_json_ids': [(6, 0, fields)]

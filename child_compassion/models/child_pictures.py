@@ -13,7 +13,7 @@ from odoo.addons.queue_job.job import job
 
 import logging
 import base64
-import urllib2
+from urllib.request import urlopen
 
 logger = logging.getLogger(__name__)
 
@@ -140,7 +140,7 @@ class ChildPictures(models.Model):
                     ind = image_split.index('media.ci.org')
                 image_split[ind + 1] = cloudinary
                 url = "/".join(image_split)
-                data = base64.encodestring(urllib2.urlopen(url).read())
+                data = base64.encodestring(urlopen(url).read())
                 _image_date = picture.child_id.last_photo_date or \
                     fields.Date.today()
                 if type.lower() == 'headshot':

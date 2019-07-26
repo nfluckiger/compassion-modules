@@ -104,13 +104,22 @@
         <field name="state">code</field>
         <field name="code">records.release_hold()</field>
     </record>
-
+<!--
     <record id="release_hold_action_multi" model="ir.values">
         <field eval="'client_action_multi'" name="key2"/>
         <field eval="'compassion.hold'" name="model"/>
         <field name="name">Release Hold</field>
         <field eval="'ir.actions.server,%d'%release_hold_action"
                name="value"/>
+    </record>
+-->
+    <record id="update_child_pictures" model="ir.actions.server">
+        <field name="name">Release Hold</field>
+        <field name="type">ir.actions.server</field>
+        <field name="model_id" ref="model_compassion_hold" />
+        <field name="binding_model_id" ref="model_compassion_hold"/>
+        <field name="state">code</field>
+        <field name="code">model.release_hold_action()</field>
     </record>
 
     <menuitem id="menu_holds" parent="menu_pool_section" name="Holds" action="open_view_holds" sequence="2" />

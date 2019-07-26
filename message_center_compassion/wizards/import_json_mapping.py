@@ -36,22 +36,19 @@ class ImportJsonMapping(models.TransientModel):
         mapping.create_from_json(data)
 
     @api.model
-    def python_install_mapping(self):
-        file_name = os.path.join(os.path.dirname(__file__)) + \
-                    '/../static/src/json/mapping.json'
-
+    def python_install_mapping(self, file_name):
         file = open(file_name)
 
-        json = file.read()
+        json_file = file.read()
 
-        data = json.loads(json)
+        data = json.loads(json_file)
 
-        for mapping_data in data:
+        for mapping_keys, mapping_data in data.items():
             odoo_model = self.env['ir.model'].search(
-                ['name', '=', mapping_data.get('odoo')]
+                [('model', '=', mapping_data['odoo'])]
             )
-            mapping = self.env['compassion_mapping'].create({
-                'name': mapping_data.get('name'),
-                'model_id': odoo_model
+            mapping = self.env['compassion.mapping'].create({
+                'name': mapping_data['name'],
+                'model_id': odoo_model.id
             })
-            mapping.create_from_json(mapping_data.get())
+            mapping.create_from_json(mapping_data['mapping'])

@@ -11,7 +11,7 @@
                     <field name="fields_json_ids">
                         <tree editable="bottom">
                             <field name="json_name"/>
-                            <field name="field_id" domain="[('field_id.model_id', '=', parent.model_id)]"/>
+                            <field name="field_id" />
                             <field name="sub_mapping_id" />
                         </tree>
                     </field>

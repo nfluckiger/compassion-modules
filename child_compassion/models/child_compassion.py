@@ -33,7 +33,7 @@ class CompassionChild(models.Model):
     _name = 'compassion.child'
     _rec_name = 'local_id'
     _inherit = ['compassion.generic.child', 'mail.thread',
-                'translatable.model', 'compassion.mapped.model']
+                'translatable.model']
     _description = "Sponsored Child"
     _order = 'local_id asc,date desc'
 

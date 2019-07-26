@@ -155,17 +155,18 @@ class OnrampConnector(object):
                 'connect_token_server and connect_token_endpoint '
                 'in your Odoo configuration file.'
             ))
-        api_client_secret = base64.b64encode(
-            "{0}:{1}".format(client, secret))
+        api_client_secret = base64.b64encode((
+            "{0}:{1}".format(client, secret)).encode('utf-8'))
         params_post = 'grant_type=client_credentials&scope=read+write'
         header_post = {
-            "Authorization": "Basic " + api_client_secret,
+            "Authorization": "Basic " + str(api_client_secret),
             "Content-type": "application/x-www-form-urlencoded",
             "Content-Length": 46,
             "Expect": "100-continue",
             "Connection": "Keep-Alive"}
         conn = http.client.HTTPSConnection(provider)
-        conn.request("POST", endpoint, params_post, header_post)
+        conn.request(method="POST", url=endpoint, body=params_post,
+                     headers=header_post, encode_chunked=True)
         response = conn.getresponse()
         try:
             token = simplejson.loads(response.read())

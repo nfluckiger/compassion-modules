@@ -466,7 +466,7 @@ class CompassionProject(models.Model):
                 project.last_weather_refresh_date = fields.Datetime.now()
 
     @api.multi
-    def get_activities(self, field, max_int=sys.maxint):
+    def get_activities(self, field, max_int=float("inf")):
         all_activities = (
             self.mapped(field + '_babies_ids') +
             self.mapped(field + '_kids_ids') +

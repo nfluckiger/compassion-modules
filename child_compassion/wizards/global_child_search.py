@@ -29,6 +29,7 @@ class GlobalChildSearch(models.TransientModel):
     Class used for searching children in the global childpool.
     """
     _name = 'compassion.childpool.search'
+    _inherit = ['compassion.mapped.model']
 
     ##########################################################################
     #                                 FIELDS                                 #
